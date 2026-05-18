@@ -1,0 +1,11 @@
+# wokwi.toml — configuración de la extensión Wokwi para VS Code.
+# Docs: https://docs.wokwi.com/vscode/project-config
+#
+# La extensión NO compila el sketch: solo simula el binario ya compilado.
+# Ruta de compilación asumida (arduino-cli):
+#   arduino-cli compile --fqbn esp32:esp32:esp32 --output-dir build .
+
+[wokwi]
+version  = 1
+firmware = 'build/actividad_3_vs.ino.bin'
+elf      = 'build/actividad_3_vs.ino.elf'

@@ -1,0 +1,31 @@
+# Artefactos de compilación de arduino-cli (se regeneran al compilar)
+build/
+*.bin
+*.elf
+*.hex
+*.map
+
+# Compilados LaTeX (por si se añade una memoria)
+memoria/*.aux
+memoria/*.bbl
+memoria/*.bcf
+memoria/*.blg
+memoria/*.log
+memoria/*.out
+memoria/*.run.xml
+memoria/*.toc
+memoria/*.synctex.gz
+
+# Configuración local del editor / IDE
+.vscode/
+.idea/
+
+# Carpeta local de Claude Code
+.claude/
+
+# Archivos temporales de Office y del SO
+~$*
+.DS_Store
+Thumbs.db
+*.swp
+*~
