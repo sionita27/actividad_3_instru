@@ -5,7 +5,7 @@ build/
 *.hex
 *.map
 
-# Compilados LaTeX (por si se añade una memoria)
+# Compilados LaTeX (intermedios de pdflatex/biber — el .pdf sí se versiona)
 memoria/*.aux
 memoria/*.bbl
 memoria/*.bcf
@@ -15,6 +15,11 @@ memoria/*.out
 memoria/*.run.xml
 memoria/*.toc
 memoria/*.synctex.gz
+memoria/secciones/*.aux
+
+# Caches de Python (preprocesador de la memoria)
+__pycache__/
+*.pyc
 
 # Configuración local del editor / IDE
 .vscode/

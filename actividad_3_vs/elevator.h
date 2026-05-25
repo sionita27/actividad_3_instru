@@ -38,6 +38,12 @@ void elevator_request(int8_t planta);
 // Tick periódico de la FSM. Llamar en cada loop.
 void elevator_tick();
 
+// Fuerza/libera el estado ALARM desde el autodiagnóstico (Act3).
+//   on=true  → entra en ALARM (la cabina queda congelada).
+//   on=false → si estaba en ALARM, vuelve a IDLE; la cola se conserva y se
+//              reanuda en el siguiente tick.
+void elevator_setAlarm(bool on);
+
 int8_t          elevator_currentFloor();
 int8_t          elevator_targetFloor();
 ElevatorState   elevator_state();

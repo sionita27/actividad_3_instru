@@ -1,0 +1,70 @@
+% ============================================================================
+%  06_firmware.tex — Arquitectura software del sistema integrado.
+% ============================================================================
+\section{Firmware}
+\label{sec:firmware}
+
+El firmware está organizado en doce módulos C++ con responsabilidades
+separadas (tabla~\ref{tab:modulos}). Once de ellos heredan, sin cambios o con
+adaptaciones mínimas, las responsabilidades de Act1 y Act2; el doceavo
+---\codein{diagnostics}--- es el módulo nuevo de esta entrega. El
+\codein{.ino} actúa como orquestador: invoca a cada módulo en el orden
+adecuado pero no habla directamente con el hardware, manteniendo el patrón
+modular que ya documentaron las dos memorias anteriores.
+
+\begin{table}[H]
+  \centering
+  \small
+  \begin{tabular}{p{0.30\textwidth} p{0.62\textwidth}}
+    \toprule
+    \textbf{Módulo} & \textbf{Responsabilidad} \\
+    \midrule
+    \codein{config.h}                & Pines, \emph{setpoints}, umbrales y constantes del autodiagnóstico. \\
+    \codein{sensors.\{h,cpp\}}       & HC-SR04, DHT22 principal y \textbf{reserva}, LDR, PIR, botones y \textbf{sensor de corriente}. \\
+    \codein{actuators.\{h,cpp\}}     & Dos servos (cabina y compuerta), LEDs de control y de clasificación, buzzer. \\
+    \codein{classifier.\{h,cpp\}}    & FSM del clasificador + puente al ascensor (altura $\rightarrow$ planta). \\
+    \codein{elevator.\{h,cpp\}}      & FSM del ascensor y cola FIFO. \\
+    \codein{control.\{h,cpp\}}       & Lazos ON-OFF con histéresis y modelo térmico simulado. \\
+    \codein{ircontrol.\{h,cpp\}}     & Decodificación del mando IR (NEC). \\
+    \codein{display.\{h,cpp\}}       & HMI sobre LCD 20$\times$4 con cuatro líneas simultáneas. \\
+    \codein{logger.\{h,cpp\}}        & Telemetría CSV unificada (clasif.\ + ascensor + clima + diagnóstico). \\
+    \codein{\textbf{diagnostics.\{h,cpp\}}} & \textbf{Capa nueva (Act3):} validación, conmutación, promediado y alarma. \\
+    \codein{actividad\_3\_vs.ino}    & \codein{setup()} y \codein{loop()} no bloqueantes. \\
+    \bottomrule
+  \end{tabular}
+  \caption{Módulos del firmware integrado.}
+  \label{tab:modulos}
+\end{table}
+
+\subsection{Cadena del \texttt{loop()}}
+
+Igual que en las actividades anteriores, el bucle principal es cooperativo y
+no bloqueante: cada subsistema se autorregula con \codein{millis()}. La
+diferencia respecto a Act2 es que las lecturas crudas de los sensores
+ambientales ya no se hacen en el \codein{.ino}: ahora pasan por
+\codein{diag\_tick()}, que las valida, las promedia, decide la fuente activa
+y entrega al control únicamente medidas \emph{ya validadas}.
+
+\begin{lstlisting}[caption={Cadena del \texttt{loop()} integrado.},
+                   label={lst:loop}]
+void loop() {
+    int8_t pIR = ircontrol_poll(); if (pIR >= 0) elevator_request(pIR);
+    int8_t pBT = buttonsPoll();    if (pBT >= 0) elevator_request(pBT);
+    classifier_tick();   // FSM + puente al ascensor si caja ALTA
+    elevator_tick();
+    diag_tick();         // lee, valida, conmuta a reserva, promedia, alarma
+    if (diag_hasClimate())
+        control_tick(diag_temp(), diag_hum(), diag_lux());
+    displayUpdate();  logger_tick();
+}
+\end{lstlisting}
+
+\subsection{Integración Act1 $\leftrightarrow$ Act2}
+
+El módulo \codein{classifier} encapsula la FSM heredada de Act1. Al confirmar
+una caja con altura inferior a \codein{UMBRAL\_ALTA\_CM} ejecuta el
+\textbf{puente al ascensor}: mapea la altura al rango
+$[0,\mathrm{NUM\_PLANTAS}{-}1]$ con \codein{map()} (caja más alta
+$\rightarrow$ planta más alta) y llama a \codein{elevator\_request(planta)}.
+Así el carril ASCENSOR de Act1 deja de ser un terminador estático y se
+convierte en la entrada real al ascensor de Act2.

@@ -1,0 +1,111 @@
+% ============================================================================
+%  preambulo.tex — Paquetes, estilos y configuración común.
+% ============================================================================
+
+% ---- Codificación e idioma --------------------------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-tabla]{babel}
+\usepackage{carlito}                  % Equivalente métrico de Calibri.
+\renewcommand{\familydefault}{\sfdefault}
+
+% ---- Geometría de página ----------------------------------------------------
+\usepackage[a4paper, margin=2cm, headheight=14pt]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+\emergencystretch=2.5em
+
+% ---- Sin sangría de párrafo (estilo Word) -----------------------------------
+\usepackage{parskip}
+\setlength{\parskip}{6pt}
+
+% ---- Figuras, tablas y color ------------------------------------------------
+\usepackage{graphicx}
+\graphicspath{{img/}}
+\usepackage{float}
+\usepackage{subcaption}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{caption}
+\captionsetup{font=small, labelfont=bf, margin=1em}
+
+% ---- Unidades ---------------------------------------------------------------
+\usepackage{siunitx}
+\sisetup{output-decimal-marker = {,}, per-mode = symbol}
+\DeclareSIUnit{\baud}{Bd}
+
+% ---- Matemáticas ------------------------------------------------------------
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+% ---- Listas ajustadas -------------------------------------------------------
+\usepackage{enumitem}
+\setlist{itemsep=2pt, topsep=4pt}
+
+% ---- Encabezados y pies -----------------------------------------------------
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\nouppercase{\leftmark}}
+\fancyhead[R]{\small Autodiagnóstico ACME}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ---- Hipervínculos ----------------------------------------------------------
+\usepackage{hyperref}
+\hypersetup{
+  colorlinks = true,
+  linkcolor  = black,
+  citecolor  = blue!60!black,
+  urlcolor   = blue!60!black,
+  pdftitle   = {Memoria --- Actividad 3 (MUINTEL07): Autodiagnóstico ACME},
+  pdfauthor  = {Stefan Lica Cristian Ionita}
+}
+
+% ---- Bibliografía (biblatex + biber) ----------------------------------------
+\usepackage[backend=biber, style=ieee, sorting=none]{biblatex}
+
+% ---- Listados de código (C/C++) --------------------------------------------
+\usepackage{listings}
+
+\definecolor{codebg}{HTML}{F7F7F7}
+\definecolor{codekw}{HTML}{1F4E79}
+\definecolor{codestr}{HTML}{8E2C2C}
+\definecolor{codecmt}{HTML}{4E7A4E}
+\definecolor{codenum}{HTML}{808080}
+
+\lstdefinestyle{cpp}{
+  language         = C++,
+  backgroundcolor  = \color{codebg},
+  basicstyle       = \ttfamily\small,
+  keywordstyle     = \color{codekw}\bfseries,
+  stringstyle      = \color{codestr},
+  commentstyle     = \color{codecmt}\itshape,
+  numberstyle      = \color{codenum}\tiny,
+  numbers          = left,
+  numbersep        = 8pt,
+  stepnumber       = 1,
+  showstringspaces = false,
+  breaklines       = true,
+  tabsize          = 2,
+  frame            = single,
+  rulecolor        = \color{black!20},
+  captionpos       = b,
+  inputencoding    = utf8,
+  extendedchars    = true,
+  literate         =
+     {á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1
+     {Á}{{\'A}}1 {É}{{\'E}}1 {Í}{{\'I}}1 {Ó}{{\'O}}1 {Ú}{{\'U}}1
+     {ñ}{{\~n}}1 {Ñ}{{\~N}}1 {¿}{{?`}}1 {¡}{{!`}}1
+     {°}{{\textdegree}}1 {µ}{{$\mu$}}1 {²}{{$^2$}}1 {·}{{$\cdot$}}1
+     {Ω}{{$\Omega$}}1 {γ}{{$\gamma$}}1
+     {—}{{---}}1 {→}{{$\rightarrow$}}1
+     {≈}{{$\approx$}}1 {≤}{{$\leq$}}1 {≥}{{$\geq$}}1,
+  morekeywords     = {uint8_t, uint16_t, uint32_t, int8_t, int16_t, int32_t, String, byte, boolean}
+}
+\lstset{style=cpp}
+
+% ---- Comandos auxiliares ----------------------------------------------------
+\newcommand{\codein}[1]{\texttt{\small #1}}   % identificador en línea
+\newcommand{\TODO}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}

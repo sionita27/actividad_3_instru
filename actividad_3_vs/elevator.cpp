@@ -131,6 +131,22 @@ void elevator_request(int8_t planta) {
     }
 }
 
+// Entra o sale del estado ALARM por orden del autodiagnóstico (Act3).
+void elevator_setAlarm(bool on) {
+    if (on) {
+        if (st != ElevatorState::ALARM) {
+            enter(ElevatorState::ALARM);
+        }
+    } else {
+        if (st == ElevatorState::ALARM) {
+            // Al despejarse el fallo volvemos a IDLE; la cola pendiente
+            // (si la hay) la reanuda elevator_tick() en el estado IDLE.
+            floorTgt = floorCur;
+            enter(ElevatorState::IDLE);
+        }
+    }
+}
+
 void elevator_tick() {
     uint32_t now = millis();
 

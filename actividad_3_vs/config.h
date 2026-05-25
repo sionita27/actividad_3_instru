@@ -89,15 +89,20 @@
 #define PIN_IR_RX            15
 
 // ----------------------------------------------------------------------------
-//  8) Botones físicos de planta (5 pulsadores — Act2)
+//  8) Botones físicos de planta (4 pulsadores — Act2)
 // ----------------------------------------------------------------------------
 //  GPIO35 es input-only sin pull-up interno → resistencia externa de 10 kΩ
 //  a 3V3 (definida en diagram.json).
+//
+//  Nota Act3: el pulsador físico de la planta 4 se RETIRÓ para liberar el
+//  GPIO17, que ahora usa el 2º DHT22 (sensor de temperatura de reserva del
+//  autodiagnóstico). La planta 4 SIGUE siendo accesible mediante el mando IR
+//  (botón 4 del mando) — los botones físicos y el IR siempre fueron
+//  redundantes entre sí.
 #define PIN_BTN_P0           32
 #define PIN_BTN_P1           33
 #define PIN_BTN_P2           35
 #define PIN_BTN_P3           16
-#define PIN_BTN_P4           17
 
 #define DEBOUNCE_MS          50UL
 
@@ -186,3 +191,51 @@
 #define LOG_PERIOD_MS        1000UL   // Fila CSV cada 1 s.
 
 #define ELEVATOR_QUEUE_LEN   8        // Máximo de plantas en cola.
+
+// ----------------------------------------------------------------------------
+//  18) Autodiagnóstico — Actividad 3 (instrumentación avanzada)
+// ----------------------------------------------------------------------------
+//  Sensor de temperatura REDUNDANTE: 2º DHT22 en GPIO17 (pin liberado al
+//  retirar el pulsador de planta 4). Da reserva de temperatura y humedad.
+#define PIN_DHT22_B          17
+
+//  Sensor de corriente de los actuadores (simulado con un potenciómetro en
+//  GPIO39, input-only/ADC). El potenciómetro modela la señal YA ACONDICIONADA
+//  de un sensor de corriente real (shunt + amplificador): en Wokwi no se
+//  puede variar el consumo real de un LED, así que el potenciómetro actúa
+//  como inyector del fallo de sobreconsumo para la demostración.
+#define PIN_CURRENT_SENSE    39
+
+//  Límites de rango físico plausible de cada sensor. Una lectura fuera de
+//  estos límites (o NaN en el DHT) indica avería: cortocircuito o circuito
+//  abierto de la conexión del sensor.
+//  Temperatura: banda de operación plausible del entorno de la planta ACME.
+//  Una lectura fuera de [-10, 50] °C se interpreta como avería del sensor.
+//  Es más estrecha que el recorrido del slider del DHT22 (-40..80 °C) a
+//  propósito: así, llevando el slider a un extremo se puede demostrar el
+//  fallo y la conmutación automática al sensor de reserva.
+#define DIAG_TEMP_MIN_C      -10.0f
+#define DIAG_TEMP_MAX_C       50.0f
+//  Humedad: una lectura por debajo del 15 % es implausible en una nave
+//  industrial → se interpreta como avería del sensor (el chequeo es
+//  h >= 15 % → válido). Por arriba el tope es el límite físico (100 %);
+//  el setpoint de control (80 %) queda dentro de la banda válida.
+#define DIAG_HUM_MIN_PCT      15.0f
+#define DIAG_HUM_MAX_PCT     100.0f
+#define DIAG_LUX_MIN_LX        1.0f
+#define DIAG_LUX_MAX_LX    20000.0f
+
+//  Promediado (media móvil) para reducir el ruido de medida (tema 6, fig. 11).
+#define DIAG_AVG_WINDOW        5      // Nº de muestras de la media móvil.
+#define DIAG_SAMPLE_MS         200UL  // Cadencia de muestreo de LDR/corriente.
+#define DIAG_FAULT_SAMPLES     3      // Muestras consecutivas para confirmar
+                                       //   un fallo (o una recuperación).
+
+//  Sensor de corriente: escalado del ADC a mA simulados y umbral de
+//  sobreconsumo. En reposo el potenciómetro queda bajo (corriente pequeña);
+//  al subirlo por encima del umbral se inyecta el fallo de sobreconsumo.
+#define DIAG_CURRENT_FULLSCALE_MA  800.0f  // Corriente a fondo de escala (ADC máx).
+#define DIAG_CURRENT_MAX_MA        500.0f  // Por encima → sobreconsumo (alarma).
+
+//  Periodo del pitido de alarma mientras hay un fallo crítico activo.
+#define DIAG_BUZZER_PERIOD_MS  1000UL

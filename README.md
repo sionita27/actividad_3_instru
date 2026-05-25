@@ -13,10 +13,10 @@ previos de la asignatura de Instrumentación Electrónica:
 La simulación corre en **Wokwi** (extensión de VS Code). No hace falta hardware
 físico.
 
-> **Estado del proyecto:** esta fusión es la **base limpia** sobre la que se
-> construirá la mejora avanzada que pide la Actividad 3. Esa mejora
-> (control remoto avanzado / autodiagnóstico / supervisión inteligente) **aún
-> no está implementada** — ver [§7](#7-estado-y-trabajo-pendiente).
+> **Mejora de la Actividad 3:** sobre la base fusionada Act1+Act2 se ha
+> implementado el **autodiagnóstico** (instrumentación avanzada): redundancia
+> de sensores con conmutación automática, detección de fallos por rango,
+> promediado de medidas y alarma escalonada — ver [§7](#7-autodiagnóstico-actividad-3).
 
 ---
 
@@ -46,6 +46,7 @@ actividad_3/
     ├── classifier.{h,cpp}       ← FSM del clasificador de cajas + puente al ascensor
     ├── elevator.{h,cpp}         ← FSM del ascensor + cola FIFO
     ├── control.{h,cpp}          ← lazos ON-OFF con histéresis + modelo térmico simulado
+    ├── diagnostics.{h,cpp}       ← autodiagnóstico: redundancia, fallos, alarma
     ├── ircontrol.{h,cpp}        ← decodificación del mando IR
     ├── display.{h,cpp}          ← HMI sobre LCD 20×4
     ├── logger.{h,cpp}           ← telemetría CSV unificada (+ RTC DS1307)
@@ -64,7 +65,8 @@ disjuntos entre ambos subsistemas.
 
 | Componente | GPIO | Subsistema | Notas |
 |---|---|---|---|
-| DHT22 (T, H) | 4 | compartido | Sensor ambiental |
+| DHT22 principal (T, H) | 4 | compartido | Sensor ambiental |
+| DHT22 reserva (T, H) | 17 | autodiagnóstico | Sensor redundante (GPIO antes del botón P4) |
 | LDR (iluminación) | 34 | compartido | Input-only, ADC1 |
 | LCD 20×4 I²C | 21 / 22 | compartido | Bus I²C, dirección `0x27` |
 | RTC DS1307 | 21 / 22 | logger | Mismo bus I²C, dirección `0x68` |
@@ -72,7 +74,7 @@ disjuntos entre ambos subsistemas.
 | Servo cabina (ascensor) | 19 | ascensor | PWM, 0–180° (5 plantas) |
 | Servo compuerta (clasificador) | 13 | clasificador | PWM, posiciones 30/90/150° |
 | Receptor IR | 15 | ascensor | Mando a distancia (NEC) |
-| Botones planta P0–P4 | 32, 33, 35, 16, 17 | ascensor | P2 (35) con pull-up externo 10 kΩ |
+| Botones planta P0–P3 | 32, 33, 35, 16 | ascensor | P2 (35) con pull-up externo 10 kΩ; la planta 4 no tiene botón físico |
 | Botón RESET contadores | 14 | clasificador | INPUT_PULLUP |
 | PIR HC-SR501 | 23 | ascensor | Presencia en cabina |
 | LED calentador (rojo) | 2 | control | ON-OFF |
@@ -80,7 +82,8 @@ disjuntos entre ambos subsistemas.
 | LED lámpara (amarillo) | 0 | control | PWM (LEDC 8 bits) |
 | LED verde (→ ASCENSOR) | 25 | clasificador | Feedback de clasificación |
 | LED rojo (→ ESCALERA) | 26 | clasificador | Feedback de clasificación |
-| Buzzer | 27 | clasificador | Pitido en cada clasificación |
+| Buzzer | 27 | clasificador / alarma | Pitido en clasificación y en alarma de diagnóstico |
+| Potenciómetro (sensor de corriente) | 39 | autodiagnóstico | Input-only ADC1; inyector del fallo de sobreconsumo |
 
 ---
 
@@ -133,8 +136,9 @@ temporizador con `millis()`, nunca `delay()`. Cadena de ejecución por iteració
 ircontrol_poll() + buttonsPoll()  →  elevator_request()   (llamadas IR/botón)
 classifier_tick()                 →  FSM del clasificador + puente al ascensor
 elevator_tick()                   →  FSM del ascensor (cabina, puerta, cola)
-readLux() / readEnvironment()     →  lectura de sensores ambientales
-control_tick()                    →  lazos ON-OFF + modelo térmico simulado
+diag_tick()                       →  autodiagnóstico: lee y valida sensores,
+                                      conmuta a la reserva, promedia, alarma
+control_tick()                    →  lazos ON-OFF con las medidas validadas
 displayUpdate()                   →  refresco del LCD 20×4 (cada 1 s)
 logger_tick()                     →  fila CSV por Serial (cada 1 s)
 ```
@@ -177,12 +181,19 @@ Línea 3:  Asc07 Esc04 OK LP P0     ← contadores + actuadores + PIR
 ### 5.5 Logger — CSV unificado
 
 Una sola tabla CSV por Serial cada 1 s, con timestamp del RTC DS1307 (o
-`millis()` si el RTC no responde):
+`millis()` si el RTC no responde). Incluye las columnas de autodiagnóstico:
 
 ```
 timestamp,piece_n,box_h_cm,box_class,floor_cur,floor_tgt,elev_state,
-T_C,H_pct,Lux_lx,heater,cooler,lamp_pwm,humidifier,dehumidifier,pir
+T_C,H_pct,Lux_lx,heater,cooler,lamp_pwm,humidifier,dehumidifier,pir,
+temp_src,dht_pri_ok,dht_bck_ok,ldr_ok,act_ok,current_ma,diag_sev
 ```
+
+### 5.6 Autodiagnóstico (`diagnostics`)
+
+Capa de instrumentación que se interpone entre la lectura cruda de sensores y
+el lazo de control. En cada tick lee, valida, promedia y vigila — ver
+[§7](#7-autodiagnóstico-actividad-3).
 
 ---
 
@@ -196,29 +207,68 @@ T_C,H_pct,Lux_lx,heater,cooler,lamp_pwm,humidifier,dehumidifier,pir
 | `3` | `0x7A` | P3 |
 | `4` | `0x10` | P4 |
 
-- **Botones físicos P0–P4**: redundantes con el mando IR (llaman a planta).
+- **Botones físicos P0–P3**: redundantes con el mando IR (llaman a planta).
+  La **planta 4 no tiene pulsador físico** — su GPIO17 se reutiliza para el
+  2º DHT22 del autodiagnóstico —, pero **la planta 4 sigue siendo plenamente
+  accesible con el botón 4 del mando IR**. Los botones físicos y el mando IR
+  siempre fueron redundantes entre sí, así que no se pierde ninguna planta.
 - **Botón RESET (GPIO14)**: pone a cero los contadores de clasificación
   (`Asc`, `Esc` y nº de caja) y borra la última caja mostrada. No afecta al
   ascensor.
 
 ---
 
-## 7. Estado y trabajo pendiente
+## 7. Autodiagnóstico (Actividad 3)
 
-**Hecho:** fusión completa Act1 + Act2 en un único sketch que compila sin
-errores, con integración funcional (el clasificador dispara el ascensor),
-HMI en LCD 20×4 y telemetría CSV unificada.
+La mejora de instrumentación avanzada elegida para la Actividad 3 es el
+**autodiagnóstico**. El módulo `diagnostics` se interpone entre la lectura
+cruda de los sensores y el lazo de control, y aporta cuatro funciones:
 
-**Pendiente:** la mejora de instrumentación avanzada propia de la Actividad 3.
-El enunciado pide elegir **una sola** de estas tres líneas:
+### 7.1 Promediado de medidas
 
-1. **Control remoto** — ajuste remoto de parámetros (setpoints, etc.).
-2. **Autodiagnóstico** — detección de fallos de sensores/actuadores, sensores
-   redundantes, RFID…
-3. **Supervisión inteligente** — lógica fuzzy o reajuste automático de
-   setpoints.
+Media móvil de las últimas muestras de temperatura, humedad e iluminación,
+para reducir el ruido de medida (tema 6, fig. 11 del enunciado).
 
-Esa funcionalidad se diseñará e implementará sobre esta base.
+### 7.2 Detección de fallos por límites de rango
+
+Cada lectura se compara con un rango físico plausible. Una lectura fuera de
+rango (o `NaN` en el DHT22), sostenida varias muestras consecutivas, se
+interpreta como **avería del sensor** (cortocircuito o circuito abierto de la
+conexión). Se vigilan el DHT22 principal, el DHT22 de reserva y el LDR.
+
+### 7.3 Redundancia del sensor de temperatura
+
+Se ha **duplicado el sensor de temperatura** con un 2º DHT22 (en GPIO17). Si
+el sensor principal falla, el sistema **conmuta automáticamente al de
+reserva** y sigue operando; cuando el principal se recupera, vuelve a él. La
+HMI indica la fuente activa con un marcador `P` (principal) / `R` (reserva)
+en la línea de clima.
+
+> **Nota importante:** el GPIO17 que ahora usa el 2º DHT22 era el del pulsador
+> físico de la planta 4. Ese pulsador se ha retirado, **pero la planta 4
+> sigue siendo plenamente accesible mediante el botón 4 del mando IR** — los
+> botones físicos y el mando IR siempre fueron redundantes. No se pierde
+> ninguna planta del ascensor.
+
+### 7.4 Diagnóstico de actuadores por consumo
+
+Un sensor de corriente (potenciómetro en GPIO39, que modela la señal ya
+acondicionada de un shunt + amplificador) vigila el consumo de los actuadores.
+Si la corriente supera el umbral de seguridad, se señala un **sobreconsumo**.
+
+### 7.5 Reacción escalonada ante el fallo
+
+| Severidad | Cuándo | Reacción |
+|---|---|---|
+| **OK** | Todo correcto | Operación normal |
+| **AVISO** | Falla un sensor con reserva (DHT principal) | Conmuta al de reserva, lo indica en LCD y CSV; **sin alarma**, el sistema sigue operando |
+| **ALARMA** | Fallo crítico sin reserva: ambos DHT22, o el LDR, o sobreconsumo de actuador | El ascensor entra en estado `ALARM` (cabina congelada) + buzzer periódico + banner en el LCD |
+
+Al desaparecer el fallo, el sistema se recupera automáticamente: la alarma se
+libera y el ascensor vuelve a `IDLE`.
+
+> HC-SR04 y PIR quedan fuera de la detección de fallos por rango: no es
+> fiable distinguir "no hay caja" / "no hay presencia" de una avería real.
 
 ---
 

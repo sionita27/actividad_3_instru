@@ -1,0 +1,28 @@
+% ============================================================================
+%  memoria.tex — Documento raíz (Actividad 3).
+%  Compilar con:   pdflatex memoria  →  biber memoria  →  pdflatex × 2
+% ============================================================================
+\documentclass[12pt,a4paper]{article}
+
+\input{preambulo}
+
+\addbibresource{bibliografia.bib}
+
+\begin{document}
+
+\input{secciones/00_portada}
+
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+\input{secciones/01_introduccion}
+\input{secciones/05_hardware}
+\input{secciones/06_firmware}
+\input{secciones/07_autodiagnostico}
+\input{secciones/08_hmi_csv}
+\input{secciones/11_resultados}
+\input{secciones/12_conclusiones}
+
+\printbibliography[heading=bibintoc, title={Bibliografía}]
+
+\end{document}

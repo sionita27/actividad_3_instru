@@ -16,6 +16,7 @@
 #include "control.h"
 #include "actuators.h"
 #include "sensors.h"
+#include "diagnostics.h"
 
 static LiquidCrystal_I2C lcd(LCD_I2C_ADDRESS, LCD_COLS, LCD_ROWS);
 
@@ -63,8 +64,13 @@ void displayUpdate() {
 
     char line[LCD_COLS + 1];
 
-    // ----- Línea 0 — última caja clasificada ------------------------------
-    if (classifier_lastPiece() == 0) {
+    // ----- Línea 0 — banner de autodiagnóstico o última caja clasificada --
+    //  Si el autodiagnóstico tiene un aviso o una alarma activos, la línea 0
+    //  se usa como banner de fallo (prioritario); si no, muestra la última
+    //  caja clasificada.
+    if (diag_severity() != DiagSeverity::OK) {
+        printPadded(diag_message(), 0);
+    } else if (classifier_lastPiece() == 0) {
         printPadded("-- SIN CAJA --", 0);
     } else if (classifier_lastFloor() >= 0) {
         snprintf(line, sizeof(line), "CAJA#%02d ASCENSOR P%d",
@@ -89,8 +95,13 @@ void displayUpdate() {
     printPadded(line, 1);
 
     // ----- Línea 2 — clima (T, H, iluminación) ----------------------------
-    snprintf(line, sizeof(line), "T%.1fC H%.0f%% L%.0flx",
-             ctrlTemp(), ctrlHum(), ctrlLux());
+    //  Tras la temperatura y tras la humedad, un marcador indica la fuente
+    //  activa de cada una (se diagnostican por separado):
+    //    P = sensor principal,  R = sensor de reserva.
+    char srcT = diag_tempSourceIsBackup() ? 'R' : 'P';
+    char srcH = diag_humSourceIsBackup()  ? 'R' : 'P';
+    snprintf(line, sizeof(line), "T%.1f%c H%.0f%%%c L%.0flx",
+             ctrlTemp(), srcT, ctrlHum(), srcH, ctrlLux());
     printPadded(line, 2);
 
     // ----- Línea 3 — contadores + actuadores + PIR ------------------------

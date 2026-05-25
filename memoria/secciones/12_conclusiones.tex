@@ -1,0 +1,40 @@
+% ============================================================================
+%  12_conclusiones.tex — Conclusiones.
+% ============================================================================
+\section{Conclusiones}
+\label{sec:conclusiones}
+
+Se han cumplido los objetivos de la Actividad~3 y se ha cerrado el ciclo de
+desarrollo del producto inteligente de \emph{ACME\,S.A.}. La base fusionada
+Act1+Act2 incorpora ahora una capa de \textbf{instrumentación avanzada} que
+aporta cuatro funciones de autodiagnóstico ---redundancia con conmutación
+automática, detección de averías por límites de rango, promediado de medidas
+y vigilancia de la corriente de actuadores--- y reacciona ante el fallo con
+una jerarquía escalonada \textsf{OK}/\textsf{AVISO}/\textsf{ALARMA} que
+distingue entre situaciones con respaldo y fallos críticos. La diagnosis de
+temperatura y humedad es \emph{independiente}, reflejando que el DHT22 tiene
+elementos de medida distintos para cada magnitud.
+
+La solución encaja con los cuatro criterios de evaluación: \emph{(C1)}\
+se han probado y documentado las partes del ejemplo de autodiagnóstico, con
+trazas CSV reales del sistema en sus distintos modos de fallo;
+\emph{(C2)}\ el circuito E/S se ha ampliado con dos componentes nuevos ---un
+DHT22 de reserva y un sensor de corriente acondicionado--- conectados a los
+únicos pines que quedaban libres en el ESP32 tras Act1+Act2;
+\emph{(C3)}\ el funcionamiento es eficiente y la programación mínima:
+\emph{toda} la capa nueva vive en un único módulo \codein{diagnostics} y el
+resto de módulos heredados se han tocado lo justo (sólo un \emph{getter}
+adicional en \codein{elevator} para forzar el estado \textsf{ALARM});
+\emph{(C4)}\ la presentación sigue el formato pedido (Carlito $\equiv$
+Calibri 12, interlineado 1.5) y respeta las diez páginas.
+
+Como nota explícita: la \textbf{planta~4} se ha quedado sin pulsador físico
+para que el GPIO\,17 acoja el segundo DHT22, pero sigue siendo accesible por
+el botón~4 del mando IR ---pulsadores y mando se diseñaron redundantes desde
+Act2---, por lo que la operativa no se degrada.
+
+\paragraph{Mejoras futuras.} Sustituir el potenciómetro por un módulo INA219
+real manteniendo la misma API de \codein{diagnostics}; añadir un
+\emph{watchdog} hardware; y exportar la telemetría por Wi-Fi a un servicio
+externo, dando el salto a una instrumentación conectada propia del IoT
+industrial.

@@ -1,0 +1,82 @@
+% ============================================================================
+%  08_hmi_csv.tex — HMI ampliada y logger CSV.
+% ============================================================================
+\section{HMI y logger}
+\label{sec:hmi}
+
+\subsection{Pantalla LCD 20×4}
+
+El LCD 16×2 de Act2 se ha sustituido por uno de
+\textbf{20 columnas × 4 filas} (\texttt{wokwi-lcd2004}, misma
+librería \texttt{LiquidCrystal\_I2C} en \texttt{0x27}). Con cuatro líneas
+ya no hace falta rotar variables: el HMI muestra las tres funciones del
+sistema simultáneamente y reserva la línea superior para la información
+crítica del autodiagnóstico:
+
+\begin{center}\small
+\begin{tabular}{@{}l@{\hspace{1.5em}}p{0.66\textwidth}@{}}
+\toprule
+\textbf{Línea} & \textbf{Contenido} \\
+\midrule
+L0 & Última caja clasificada, p.\,ej.\\texttt{CAJA\#07 ASCENSOR P3}, o el
+      \textbf{banner del autodiagnóstico} si la severidad no es \textsf{OK}
+      (p.\,ej.\\texttt{AVISO H->RESERVA} o \texttt{!ALARMA SENSOR LUZ}). \\
+L1 & Estado del ascensor, p.\,ej.\\texttt{ELEV MOVING P0>P3}. \\
+L2 & Clima: \texttt{T23.0P H55\%R L401lx}. Tras el valor de cada magnitud
+      aparece el \textbf{marcador de fuente activa} del autodiagnóstico:
+      \texttt{P} = sensor principal, \texttt{R} = sensor de reserva. Los
+      marcadores de T y H son \emph{independientes}: una conmutación de la
+      humedad no cambia la marca de la temperatura. \\
+L3 & Contadores y diagnóstico de actuadores:
+      \texttt{Asc07 Esc04 OK LP P0} (cajas a ASCENSOR y a ESCALERA,
+      etiqueta del actuador térmico, lámpara, presencia PIR). \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Logger CSV unificado}
+
+El \emph{logger} emite una fila de telemetría cada \texttt{LOG\_PERIOD\_MS}
+(1 s) al puerto serie a 115200 Bd, con la cabecera
+impresa una sola vez al arrancar. Mantiene el formato CSV plano de Act2 y
+añade siete columnas de diagnóstico que documentan la nueva capa de
+instrumentación (tabla~\ref{tab:csv}). El \emph{timestamp} es absoluto si
+el RTC DS1307 responde (\texttt{YYYY-MM-DD HH:MM:SS}); si no, se usa
+\texttt{millis()} en formato relativo.
+
+\begin{table}[H]
+  \centering
+  \small
+  \begin{tabular}{p{0.20\textwidth} p{0.72\textwidth}}
+    \toprule
+    \textbf{Bloque} & \textbf{Columnas} \\
+    \midrule
+    Marca de tiempo & \texttt{timestamp}. \\
+    Clasificación   & \texttt{piece\_n, box\_h\_cm, box\_class}. \\
+    Ascensor        & \texttt{floor\_cur, floor\_tgt, elev\_state}. \\
+    Clima (control) & \texttt{T\_C, H\_pct, Lux\_lx} --- valores validados y
+                      promediados que recibe el control. \\
+    Actuadores      & \texttt{heater, cooler, lamp\_pwm, humidifier,
+                      dehumidifier, pir}. \\
+    Autodiagnóstico & \texttt{temp\_src, hum\_src} (P/R independientes);
+                      \texttt{t\_pri\_ok, t\_bck\_ok, h\_pri\_ok, h\_bck\_ok}
+                      (salud de cada elemento, 1/0); \texttt{ldr\_ok,
+                      act\_ok}; \texttt{current\_ma} (corriente promediada
+                      del bloque de actuadores); \texttt{diag\_sev}
+                      (\textsf{OK}/\textsf{AVISO}/\textsf{ALARMA}). \\
+    Lecturas crudas & \texttt{t\_raw, h\_raw, lux\_raw} --- lo que entregó
+                      cada sensor antes de validar y promediar; deja
+                      \emph{evidencia} del valor que provocó cualquier
+                      avería. \\
+    \bottomrule
+  \end{tabular}
+  \caption{Bloques de columnas del CSV unificado.}
+  \label{tab:csv}
+\end{table}
+
+La distinción entre las columnas \emph{validadas} (\texttt{T\_C}, \ldots) y
+las \emph{crudas} (\texttt{t\_raw}, \ldots) es la clave para auditar el
+funcionamiento del autodiagnóstico: durante un fallo, las primeras se
+\emph{congelan} en el último valor válido (el control no debe ver datos
+sospechosos), mientras que las segundas muestran la lectura real que llevó a
+declarar la avería.

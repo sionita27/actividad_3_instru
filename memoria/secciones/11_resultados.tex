@@ -1,0 +1,82 @@
+% ============================================================================
+%  11_resultados.tex — Pruebas en Wokwi.
+% ============================================================================
+\section{Resultados}
+\label{sec:resultados}
+
+Las pruebas se han realizado sobre el simulador Wokwi~\cite{wokwi_docs}
+integrado con VS~Code. El circuito está descrito en \codein{diagram.json} y
+se arranca con \emph{F1 $\rightarrow$ Wokwi: Start Simulator} tras compilar
+con \codein{arduino-cli --fqbn esp32:esp32:esp32 .}. Los valores
+ambientales se controlan con los \emph{sliders} de los componentes
+\codein{wokwi-dht22} (principal y reserva), \codein{wokwi-photoresistor} y
+del potenciómetro de corriente. Las llamadas al ascensor se hacen con los
+botones físicos P0--P3, el mando IR (incluido el botón~4 que cubre la
+\textbf{planta~4}) y la propia entrega de cajas altas desde el clasificador.
+
+\paragraph{Sesión representativa.}
+
+La traza siguiente reproduce, simplificada, una sesión real del monitor
+serie a \SI{115200}{\baud}. Se ha bajado el slider del DHT22 principal por
+debajo de \SI{-10}{\celsius}, después se ha bajado la humedad del principal
+al \SI{12}{\percent} y por último se ha cranado el slider del LDR por encima
+de \SI{20000}{lux}; en cada paso el sistema diagnostica el fallo y reacciona.
+
+\begin{lstlisting}[language={}, basicstyle=\ttfamily\scriptsize,
+                   breaklines=false, label={lst:log},
+                   caption={Traza CSV (extracto). Cabecera: \codein{ts,...,
+                            T\_C,H\_pct,Lux\_lx,...,temp\_src,hum\_src,
+                            t\_pri\_ok,t\_bck\_ok,h\_pri\_ok,h\_bck\_ok,
+                            ldr\_ok,act\_ok,...,diag\_sev,
+                            t\_raw,h\_raw,lux\_raw}.}]
+22:58:00,...,23.00,55.00,400.26,...,PRI,PRI,1,1,1,1,1,1,...,OK,    23.00, 55.00,  400.26
+-- principal T -> -13,7 C (fuera de -10..50); tras 3 ciclos del DHT:
+[DIAG] fuente de TEMPERATURA -> RESERVA
+22:58:27,...,23.00,67.60,6928.50,...,BCK,PRI,0,1,1,1,1,1,...,AVISO,-13.70, 76.00, 6928.50
+-- principal T -> 6,5 C (en rango), recupera:
+[DIAG] fuente de TEMPERATURA -> PRINCIPAL
+22:59:32,...,6.50, 76.00,6928.50,...,PRI,PRI,1,1,1,1,1,1,...,OK,    6.50, 76.00, 6928.50
+-- principal H -> 12 % (fuera de 15..100); conmuta SOLO humedad:
+[DIAG] fuente de HUMEDAD -> RESERVA
+23:00:21,...,6.50,87.50,6928.50,...,PRI,BCK,1,1,0,1,1,1,...,AVISO, 6.50, 12.00, 6928.50
+-- LDR -> >20000 lux; sin reserva -> ALARMA:
+23:00:35,...,3.54,87.50,6928.50,...,PRI,BCK,1,1,0,1,0,1,...,ALARMA,-8.30,12.00,27795.06
+-- LDR vuelve a rango; alarma se libera, AVISO por humedad continua:
+23:00:41,...,0.58,87.50,2880.37,...,PRI,BCK,1,1,0,1,1,1,...,AVISO,-8.30, 12.00, 2880.37
+\end{lstlisting}
+
+\paragraph{Casos verificados.}
+
+\begin{itemize}
+  \item \textbf{Conmutación y recuperación de temperatura}. A las 22:58:27,
+        tras 3 ciclos de DHT con \codein{t\_raw=-13,70} ($\approx\SI{6}{\second}$
+        de anti-rebote), \codein{t\_pri\_ok} pasa a 0, la fuente cambia a
+        \codein{BCK} y la severidad sube a \textsf{AVISO}; al devolver el
+        slider a \SI{6,5}{\celsius} la fuente regresa sola a \codein{PRI} y
+        baja a \textsf{OK}. La humedad permanece en \codein{PRI} todo el rato.
+  \item \textbf{Conmutación de humedad independiente}. A las 23:00:21,
+        \codein{h\_raw=12}\,\%\,$<\SI{15}{\percent}$ provoca que \emph{sólo}
+        la humedad pase a la reserva (\codein{hum\_src=BCK},
+        \codein{h\_pri\_ok=0}) mientras \codein{temp\_src} sigue en
+        \codein{PRI}: demostración cruzada de la independencia T/H.
+  \item \textbf{Alarma crítica de LDR y recuperación}. Sin reserva en
+        iluminación, \codein{lux\_raw=27795}\,$>\SI{20000}{lux}$ dispara
+        \textsf{ALARMA}: el ascensor pasa a \textsf{ALARM}, suena el buzzer
+        y el LCD muestra \codein{!ALARMA SENSOR LUZ}. Al devolver el slider,
+        la alarma se libera y el ascensor vuelve a \textsf{IDLE} sin perder
+        la cola.
+  \item \textbf{Promediado y datos crudos}. Las columnas validadas
+        (\codein{T\_C}, \codein{Lux\_lx}) varían suavemente respecto a las
+        crudas (\codein{t\_raw}, \codein{lux\_raw}) y se \emph{congelan} si
+        la cruda queda fuera de rango: el control nunca actúa sobre un dato
+        sospechoso, pero la cruda deja constancia en el CSV.
+  \item \textbf{Sobreconsumo de actuadores}. En pruebas adicionales, subir el
+        potenciómetro por encima de \SI{500}{\milli\ampere} pone
+        \codein{act\_ok=0} y dispara \textsf{ALARMA}; el promediado de la
+        corriente elimina los disparos por ruido del ADC.
+  \item \textbf{Integración y planta 4 por IR}. El clasificador sigue
+        diviendo cajas; una caja alta (\codein{[CLF] caja \#6 ALTA 10 cm})
+        dispara \codein{elevator\_request(2)} automáticamente. El botón~4
+        del mando IR sigue solicitando la planta~4 pese a no tener pulsador
+        físico.
+\end{itemize}

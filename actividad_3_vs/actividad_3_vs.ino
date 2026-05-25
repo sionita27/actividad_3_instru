@@ -4,21 +4,24 @@
 //  Fusiona en un único ESP32 los dos sistemas previos:
 //    · Act1 — clasificador de cajas por altura (módulo classifier).
 //    · Act2 — ascensor inteligente de 5 plantas + control ambiental.
+//  y añade la mejora de instrumentación avanzada de la Actividad 3:
+//    · Act3 — autodiagnóstico (módulo diagnostics): redundancia de sensores,
+//             detección de fallos por rango, promediado y alarma escalonada.
 //
-//  Integración funcional: cuando el clasificador confirma una caja ALTA,
-//  el módulo classifier mapea su altura a una planta y llama internamente
-//  a elevator_request() — la caja "sube" por el ascensor.
+//  Integración funcional: cuando el clasificador confirma una caja alta,
+//  el módulo classifier mapea su altura a una planta y dispara
+//  elevator_request() — la caja "sube" por el ascensor.
 //
 //  Bucle no bloqueante (millis(), nunca delay()). Cada iteración:
 //    1) Sondea IR + botones de planta → peticiones al ascensor.
 //    2) Tick del clasificador (HC-SR04 + FSM + puente al ascensor).
 //    3) Tick de la FSM del ascensor (cabina + puerta + cola FIFO).
-//    4) Lee LDR (rápido) y, cada 2 s, el DHT22.
-//    5) Tick del control ambiental (modelo + lazos ON-OFF con histéresis).
+//    4) Tick del autodiagnóstico: lee y valida sensores, conmuta a la
+//       reserva si hace falta, promedia y decide la alarma.
+//    5) Tick del control ambiental con las medidas validadas.
 //    6) Refresca HMI (LCD 20x4) y logger CSV.
 // ============================================================================
 
-#include <math.h>            // NAN, isnan().
 #include <Wire.h>
 #include "config.h"
 #include "sensors.h"
@@ -26,19 +29,10 @@
 #include "actuators.h"
 #include "classifier.h"
 #include "elevator.h"
+#include "diagnostics.h"
 #include "control.h"
 #include "display.h"
 #include "logger.h"
-
-// ----------------------------------------------------------------------------
-//  Cache de las últimas lecturas ambientales válidas.
-//  lastT/lastH arrancan en NaN para que control_tick() NO se ejecute hasta
-//  que el DHT22 devuelva al menos UNA muestra buena.
-// ----------------------------------------------------------------------------
-static float    lastT    = NAN;
-static float    lastH    = NAN;
-static float    lastLux  = 0.0f;        // El LDR no falla, arranca a 0 lx.
-static uint32_t tLastEnv = 0;
 
 void setup() {
     Serial.begin(SERIAL_BAUD);
@@ -52,17 +46,19 @@ void setup() {
     classifier_setup();
     elevator_setup();
     control_setup();
+    diag_setup();
     initLogger();
 
     Serial.println();
-    Serial.println(F("[Act3] boot OK — sistema integrado Act1+Act2"));
+    Serial.println(F("[Act3] boot OK — sistema integrado Act1+Act2+autodiagnostico"));
 }
 
 void loop() {
     uint32_t now = millis();
 
     // ------------------------------------------------------------------
-    //  Peticiones al ascensor: mando IR + 5 botones físicos de planta.
+    //  Peticiones al ascensor: mando IR + 4 botones físicos de planta.
+    //  (La planta 4 no tiene botón físico; se llama con el mando IR.)
     // ------------------------------------------------------------------
     int8_t plantaIR = ircontrol_poll();
     if (plantaIR >= 0) {
@@ -83,24 +79,18 @@ void loop() {
     elevator_tick();
 
     // ------------------------------------------------------------------
-    //  Sensores ambientales: el LDR se lee en cada iteración; el DHT22
-    //  está limitado a una lectura cada 2 s (hardware).
+    //  Autodiagnóstico: lee DHT principal/reserva, LDR y sensor de
+    //  corriente; valida, conmuta de fuente, promedia y gestiona la alarma.
     // ------------------------------------------------------------------
-    lastLux = readLux();
+    diag_tick();
 
-    if (now - tLastEnv >= DHT22_PERIODO_MS) {
-        tLastEnv = now;
-        float t, h;
-        if (readEnvironment(t, h)) {
-            lastT = t;
-            lastH = h;
-        }
-    }
-
-    // Tick del control en cada iteración (se auto-limita internamente).
-    // Si aún no hay lectura buena del DHT22, saltamos el control.
-    if (!isnan(lastT) && !isnan(lastH)) {
-        control_tick(lastT, lastH, lastLux);
+    // ------------------------------------------------------------------
+    //  Control ambiental con las medidas YA validadas y promediadas por el
+    //  autodiagnóstico. Si no hay una fuente de temperatura válida (ambos
+    //  DHT en fallo), se omite el control.
+    // ------------------------------------------------------------------
+    if (diag_hasClimate()) {
+        control_tick(diag_temp(), diag_hum(), diag_lux());
     }
 
     // ------------------------------------------------------------------

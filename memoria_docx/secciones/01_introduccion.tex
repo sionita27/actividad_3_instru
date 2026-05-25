@@ -1,0 +1,46 @@
+% ============================================================================
+%  01_introduccion.tex — Introducción y punto de partida.
+% ============================================================================
+\section{Introducción}
+\label{sec:intro}
+
+La Actividad~3 cierra el ciclo de desarrollo del producto inteligente de
+\emph{ACME\,S.A.}: sobre el sistema embebido construido en las dos actividades
+previas se incorpora una funcionalidad de \textbf{instrumentación avanzada}
+que perfecciona su eficiencia, fiabilidad y trazabilidad, alineándola con los
+objetivos de digitalización industrial que persigue la empresa.
+
+El \textbf{punto de partida} es una base limpia que fusiona en un único
+\emph{sketch} sobre ESP32 los dos proyectos anteriores: el \textbf{clasificador
+de cajas} de la Actividad~1 (HC-SR04, servo-compuerta, indicadores) y el
+\textbf{ascensor inteligente de cinco plantas} de la Actividad~2 (mando IR
+NEC con la librería \emph{Arduino-IRremote}~\cite{irremote_gh}, botones, PIR,
+lazo ON-OFF de clima). La integración va más allá de la mera
+convivencia en el mismo \texttt{loop()}: cuando el clasificador confirma una
+caja \emph{alta}, su altura se mapea a una planta del ascensor y se invoca
+\texttt{elevator\_request()} automáticamente, de modo que la caja desviada al
+carril de ascensor en Act1 \emph{sube físicamente} por el ascensor de Act2. La
+arquitectura modular de ambos proyectos --- pines disjuntos y APIs claras ---
+permitió esa fusión con cambios mínimos y sin tocar el cableado de los
+sensores compartidos.
+
+Entre las tres líneas que propone el enunciado para perfeccionar el sistema
+---control remoto, autodiagnóstico y supervisión inteligente--- se ha
+seleccionado el \textbf{autodiagnóstico}. Es la opción que mejor encaja con
+el reparto de evaluación (el Criterio~2, que vale el 40 \%, premia
+la \emph{ampliación del circuito E/S}) y la que aporta más valor sobre la base
+ya construida: introduce \textbf{sensores redundantes}, \textbf{detección de
+averías por límites de rango}, \textbf{promediado de medidas} y
+\textbf{vigilancia del consumo de actuadores}, todo ello con una
+\textbf{reacción escalonada} que reproduce el comportamiento de un sistema de
+instrumentación industrial moderno (avisar cuando hay reserva, dar alarma
+cuando el fallo es crítico). La nueva capa se implementa en un único módulo
+---\texttt{diagnostics}--- que se interpone entre los sensores y el lazo de
+control sin alterar los módulos heredados, cumpliendo así el principio de
+\emph{mínima programación} (Criterio~3).
+
+El resto de la memoria describe el hardware fusionado (§\ref{sec:hardware}),
+la arquitectura del firmware (§\ref{sec:firmware}), el núcleo de la nueva
+capa de instrumentación (§\ref{sec:autodiag}), la interfaz HMI y el logger
+ampliado (§\ref{sec:hmi}), las pruebas reales en Wokwi (§\ref{sec:resultados})
+y las conclusiones (§\ref{sec:conclusiones}).

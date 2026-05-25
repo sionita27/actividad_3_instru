@@ -17,6 +17,16 @@
 #include "control.h"
 #include "actuators.h"
 #include "sensors.h"
+#include "diagnostics.h"
+
+// Nombre corto de la severidad del autodiagnóstico para la columna CSV.
+static const char* diagSevName() {
+    switch (diag_severity()) {
+        case DiagSeverity::AVISO:  return "AVISO";
+        case DiagSeverity::ALARMA: return "ALARMA";
+        default:                   return "OK";
+    }
+}
 
 // ----------------------------------------------------------------------------
 //  Estado interno del módulo
@@ -44,10 +54,12 @@ void initLogger() {
 
     // Cabecera CSV unificada (clasificador + ascensor + clima + actuadores).
     Serial.println();
-    Serial.println(F("# CSV ACME integrado (Act1+Act2)"));
+    Serial.println(F("# CSV ACME integrado (Act1+Act2+autodiagnostico)"));
     Serial.println(F("timestamp,piece_n,box_h_cm,box_class,floor_cur,floor_tgt,"
                      "elev_state,T_C,H_pct,Lux_lx,heater,cooler,lamp_pwm,"
-                     "humidifier,dehumidifier,pir"));
+                     "humidifier,dehumidifier,pir,"
+                     "temp_src,hum_src,t_pri_ok,t_bck_ok,h_pri_ok,h_bck_ok,"
+                     "ldr_ok,act_ok,current_ma,diag_sev,t_raw,h_raw,lux_raw"));
     tLast = millis();
 }
 
@@ -78,7 +90,8 @@ void logger_tick() {
 
     String ts = getTimestamp();
 
-    Serial.printf("%s,%d,%d,%s,%d,%d,%s,%.2f,%.2f,%.2f,%d,%d,%u,%d,%d,%d\r\n",
+    Serial.printf("%s,%d,%d,%s,%d,%d,%s,%.2f,%.2f,%.2f,%d,%d,%u,%d,%d,%d,"
+                  "%s,%s,%d,%d,%d,%d,%d,%d,%.0f,%s,%.2f,%.2f,%.2f\r\n",
                   ts.c_str(),
                   classifier_lastPiece(),
                   classifier_lastHeightCm(),
@@ -92,5 +105,18 @@ void logger_tick() {
                   (unsigned) lampPwm(),
                   humidifierIsOn()   ? 1 : 0,
                   dehumidifierIsOn() ? 1 : 0,
-                  pirRead()          ? 1 : 0);
+                  pirRead()          ? 1 : 0,
+                  // --- columnas de autodiagnóstico (Act3) ---
+                  diag_tempSourceIsBackup() ? "BCK" : "PRI",
+                  diag_humSourceIsBackup()  ? "BCK" : "PRI",
+                  diag_tempPriOk()  ? 1 : 0,
+                  diag_tempBckOk()  ? 1 : 0,
+                  diag_humPriOk()   ? 1 : 0,
+                  diag_humBckOk()   ? 1 : 0,
+                  diag_ldrOk()      ? 1 : 0,
+                  diag_actuatorOk() ? 1 : 0,
+                  diag_currentMa(),
+                  diagSevName(),
+                  // --- lecturas crudas (lo que entregó el sensor) ---
+                  diag_rawTemp(), diag_rawHum(), diag_rawLux());
 }

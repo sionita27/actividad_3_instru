@@ -13,8 +13,11 @@
 #include "sensors.h"
 #include "ircontrol.h"       // Para pausar el timer de IR durante la lectura DHT.
 
-// Objeto DHT — vive solo dentro de este .cpp.
+// Objetos DHT — viven solo dentro de este .cpp.
+//   dht  : sensor principal (PIN_DHT22).
+//   dhtB : sensor de reserva del autodiagnóstico (PIN_DHT22_B).
 static DHT dht(PIN_DHT22, DHT22);
+static DHT dhtB(PIN_DHT22_B, DHT22);
 
 // ----------------------------------------------------------------------------
 //  Constantes internas del HC-SR04
@@ -36,12 +39,13 @@ struct ButtonState {
     bool     pressed;
 };
 
+// Cuatro botones (P0..P3). La planta 4 no tiene pulsador físico — se llama
+// con el mando IR (su GPIO17 lo usa ahora el 2º DHT22).
 static ButtonState BUTTONS[] = {
     { PIN_BTN_P0, HIGH, 0, HIGH, false },
     { PIN_BTN_P1, HIGH, 0, HIGH, false },
     { PIN_BTN_P2, HIGH, 0, HIGH, false },
     { PIN_BTN_P3, HIGH, 0, HIGH, false },
-    { PIN_BTN_P4, HIGH, 0, HIGH, false },
 };
 static const size_t NUM_BUTTONS = sizeof(BUTTONS) / sizeof(BUTTONS[0]);
 
@@ -57,6 +61,9 @@ void initSensors() {
     // LDR — GPIO34 input-only, sin pull-up.
     pinMode(PIN_LDR, INPUT);
 
+    // Sensor de corriente de actuadores (potenciómetro) — GPIO39 input-only.
+    pinMode(PIN_CURRENT_SENSE, INPUT);
+
     // Botones de planta. GPIO35 es input-only sin pull-up interno → usa
     // resistencia externa de 10 kΩ (diagram.json); el resto, pull-up interno.
     for (size_t i = 0; i < NUM_BUTTONS; ++i) {
@@ -71,7 +78,9 @@ void initSensors() {
     pinMode(PIN_PIR, INPUT);
 
     // DHT22 — begin() configura el pin y resetea el cache de la librería.
+    // Se inicializan los dos: principal y reserva.
     dht.begin();
+    dhtB.begin();
 }
 
 // ============================================================================
@@ -139,6 +148,42 @@ bool readEnvironment(float &t, float &h) {
     t = tLocal;
     h = hLocal;
     return true;
+}
+
+// ============================================================================
+//  readEnvironmentB() — DHT22 de RESERVA (autodiagnóstico).
+// ----------------------------------------------------------------------------
+//  Sensor redundante del autodiagnóstico. Misma mecánica que readEnvironment()
+//  (pausa del timer IR incluida), pero sin la traza serie detallada para no
+//  duplicar mensajes en el monitor.
+// ============================================================================
+bool readEnvironmentB(float &t, float &h) {
+    ircontrol_pause();
+    float tLocal = dhtB.readTemperature();
+    float hLocal = dhtB.readHumidity();
+    ircontrol_resume();
+
+    if (isnan(tLocal) || isnan(hLocal)) {
+        return false;
+    }
+    t = tLocal;
+    h = hLocal;
+    return true;
+}
+
+// ============================================================================
+//  readActuatorCurrent() — sensor de corriente de los actuadores (simulado).
+// ----------------------------------------------------------------------------
+//  Lee el ADC del potenciómetro (PIN_CURRENT_SENSE) y lo escala linealmente a
+//  miliamperios simulados: 0 → 0 mA, fondo de escala → DIAG_CURRENT_FULLSCALE_MA.
+//  El potenciómetro representa la señal ya acondicionada de un sensor de
+//  corriente real; moverlo permite inyectar el fallo de sobreconsumo.
+// ============================================================================
+float readActuatorCurrent() {
+    int adc = analogRead(PIN_CURRENT_SENSE);
+    float mA = (adc / (float) ADC_MAX) * DIAG_CURRENT_FULLSCALE_MA;
+    if (mA < 0.0f) mA = 0.0f;
+    return mA;
 }
 
 // ============================================================================

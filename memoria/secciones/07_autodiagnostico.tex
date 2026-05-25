@@ -1,0 +1,151 @@
+% ============================================================================
+%  07_autodiagnostico.tex — Núcleo de la Actividad 3.
+% ============================================================================
+\section{Autodiagnóstico}
+\label{sec:autodiag}
+
+El módulo \codein{diagnostics} es la \textbf{capa de instrumentación
+avanzada} que se interpone entre las lecturas crudas de los sensores y el
+lazo de control de clima. En cada \codein{diag\_tick()} ejecuta cinco
+acciones encadenadas: lee los sensores monitorizados, valida cada lectura por
+rango, mantiene una media móvil de las medidas válidas, decide la fuente
+activa de temperatura y de humedad por separado, y reacciona ante el fallo
+con una severidad escalonada que puede llegar a inhibir el ascensor. El
+diagrama de bloques se muestra en la figura~\ref{fig:diag}.
+
+\begin{figure}[H]
+  \centering
+  \IfFileExists{img/diag_pipeline.png}{%
+    \includegraphics[width=0.88\textwidth]{diag_pipeline.png}%
+  }{%
+    \fbox{\textit{[Pendiente: diagrama de bloques del módulo
+      \codein{diagnostics}]}}%
+  }
+  \caption{Tubería de \codein{diagnostics}: lectura $\rightarrow$ validación
+    por rango $\rightarrow$ conmutación independiente T/H $\rightarrow$
+    promediado $\rightarrow$ severidad.}
+  \label{fig:diag}
+\end{figure}
+
+\paragraph{Detección de fallos por límites de rango.}
+\label{sub:rango}
+
+A cada sensor monitorizado se le asocia una \emph{banda de operación
+plausible} en su unidad física (tabla~\ref{tab:bandas}). Una lectura fuera
+de la banda ---o un \codein{NaN} en el caso del DHT22, que la librería
+devuelve ante fallo del protocolo--- se interpreta como
+\textbf{cortocircuito o circuito abierto} de la conexión del sensor. Para
+la temperatura y la humedad, los límites se han elegido más estrechos que
+el rango total del chip ($-40$..$80\,^{\circ}$C y $0$..$100\,\%$ según
+\cite{aosong_dht22}): así un valor físicamente posible pero implausible
+para el entorno de la planta se trata también como avería. Para evitar disparos por ruido, se exige que
+\codein{DIAG\_FAULT\_SAMPLES} (3) lecturas consecutivas sean malas antes de
+declarar la avería; igualmente se exigen 3 buenas seguidas antes de dar el
+sensor por recuperado (anti-rebote tipo Schmitt sobre la salud del sensor).
+
+\begin{table}[H]
+  \centering
+  \small
+  \begin{tabular}{p{0.18\textwidth} p{0.20\textwidth} p{0.18\textwidth} p{0.36\textwidth}}
+    \toprule
+    \textbf{Magnitud} & \textbf{Banda válida} & \textbf{Sensor} & \textbf{Justificación} \\
+    \midrule
+    Temperatura  & \SIrange{-10}{50}{\celsius} & DHT22 (pri/res)
+                 & Banda operativa industrial (más estrecha que el rango total
+                   del sensor, $-40$..$80\,^{\circ}$C). \\
+    Humedad      & \SIrange{15}{100}{\percent} & DHT22 (pri/res)
+                 & $<\SI{15}{\percent}$ implausible en aire ambiente. \\
+    Iluminación  & \SIrange{1}{20000}{lux}     & LDR
+                 & Interior industrial; $>\SI{20000}{lux}$ son exteriores. \\
+    Corriente    & $\leq \SI{500}{\milli\ampere}$ & Pot.\ acond.
+                 & Umbral de \emph{sobreconsumo} (§\ref{sub:corriente}). \\
+    \bottomrule
+  \end{tabular}
+  \caption{Bandas de operación plausible y su justificación.}
+  \label{tab:bandas}
+\end{table}
+
+\paragraph{Promediado de medidas (media móvil).}
+\label{sub:avg}
+
+Para reducir el ruido de medida~\cite{corona2014instrumentacion} todas las
+lecturas válidas pasan por una \textbf{media móvil} de
+\codein{DIAG\_AVG\_WINDOW}=5 muestras antes de alimentar al control y al
+\emph{display}. El búfer de cada magnitud es independiente y descarta las
+muestras marcadas como malas, de modo que un fallo transitorio no contamina
+la media. Cuando una magnitud conmuta de sensor (ver §\ref{sub:redund}), su
+búfer se \textbf{vacía} para no mezclar lecturas de dos físicas distintas.
+
+\subsection{Redundancia independiente de temperatura y humedad}\label{sub:redund}
+
+El enunciado pide \emph{duplicar el sensor de temperatura para que, si uno
+falla, se active el sensor de reserva}. En esta entrega se ha llevado un paso
+más allá: el DHT22 tiene un elemento de medida \emph{independiente} para
+temperatura y otro para humedad, por lo que en la práctica puede degradarse
+una magnitud sin la otra. El módulo lo refleja con cuatro monitores de salud
+independientes (\codein{monPriT}, \codein{monBckT}, \codein{monPriH},
+\codein{monBckH}) y \emph{dos} indicadores de fuente activa
+(\codein{usingBackupT} y \codein{usingBackupH}). El resultado es que el
+sistema puede estar usando el DHT22 \emph{de reserva} para la temperatura y
+al mismo tiempo el \emph{principal} para la humedad, o viceversa. La
+conmutación es automática y reversible: cuando un sensor en fallo se
+recupera, su monitor confirma 3 lecturas buenas seguidas y la fuente vuelve
+al principal.
+
+El proceso de selección es: si el principal está sano se usa siempre el
+principal; si no, se usa la reserva siempre que esté sana; si ambos fallan
+se mantiene la última fuente activa. Cuando la fuente cambia, se vacía el
+búfer de la media móvil para no mezclar lecturas de sensores distintos.
+
+\paragraph{Diagnóstico de actuadores por sensor de corriente.}\label{sub:corriente}
+
+La parte de actuadores se cubre con un \textbf{sensor de corriente} en
+GPIO\,39 (V\textsubscript{N}). En un montaje real correspondería a la salida
+ya acondicionada de una resistencia \emph{shunt} amplificada; en Wokwi se
+modela con un potenciómetro, pues no es posible variar dinámicamente el
+consumo real de un LED. El ADC se promedia con la misma ventana móvil que el
+resto de magnitudes ---imprescindible para no disparar falsas alarmas con el
+ruido del ADC del ESP32--- y se compara con
+\codein{DIAG\_CURRENT\_MAX\_MA}=\SI{500}{\milli\ampere}: si la corriente
+promediada supera ese umbral, se declara \textbf{sobreconsumo} y la
+severidad sube a \textsf{ALARMA}.
+
+\subsection{Reacción escalonada: OK $\rightarrow$ AVISO $\rightarrow$ ALARMA}\label{sub:severidad}
+
+La decisión de severidad combina los siete monitores de salud anteriores con
+una jerarquía sencilla pero realista (tabla~\ref{tab:severidad}). La idea es
+distinguir un fallo con respaldo (donde el sistema puede seguir operando) de
+un fallo crítico que exige detener el ascensor.
+
+\begin{table}[H]
+  \centering
+  \small
+  \begin{tabular}{p{0.18\textwidth} p{0.40\textwidth} p{0.36\textwidth}}
+    \toprule
+    \textbf{Severidad} & \textbf{Condición} & \textbf{Reacción} \\
+    \midrule
+    \textsf{OK}     & Todos los sensores sanos y operando con el principal.
+                    & Operación normal. \\
+    \textsf{AVISO}  & Algún DHT principal falló pero hay reserva sana
+                      (sólo en T, sólo en H, o en ambas).
+                    & Conmuta a reserva, lo indica en LCD y CSV, el sistema
+                      sigue operando; \emph{sin} alarma sonora. \\
+    \textsf{ALARMA} & Fallo crítico sin reserva: ambos DHT en T,
+                      o ambos en H, o LDR averiado, o sobreconsumo.
+                    & El ascensor pasa al estado \textsf{ALARM} (cabina
+                      congelada), el buzzer pita cada
+                      \SI{1}{\second} y el LCD muestra el banner del fallo.
+                      Al desaparecer el fallo, el sistema vuelve a
+                      \textsf{IDLE} automáticamente. \\
+    \bottomrule
+  \end{tabular}
+  \caption{Severidad escalonada del autodiagnóstico.}
+  \label{tab:severidad}
+\end{table}
+
+Cuando la severidad es \textsf{ALARMA}, \codein{diagnostics} llama a
+\codein{elevator\_setAlarm(true)} ---una pequeña API que se ha añadido al
+módulo \codein{elevator} para que el autodiagnóstico pueda forzar y liberar
+el estado \textsf{ALARM} de la FSM existente. La cola de plantas se conserva
+durante la alarma, de modo que al despejarse el fallo el ascensor reanuda
+los destinos pendientes sin que el operador deba reintroducirlos.

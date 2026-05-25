@@ -22,8 +22,10 @@
     { "type": "wokwi-pushbutton", "id": "btnP1", "top": 0,   "left": 540, "attrs": { "color": "yellow", "label": "P1", "bounce": "0" } },
     { "type": "wokwi-pushbutton", "id": "btnP2", "top": 60,  "left": 540, "attrs": { "color": "blue",   "label": "P2", "bounce": "0" } },
     { "type": "wokwi-pushbutton", "id": "btnP3", "top": 120, "left": 540, "attrs": { "color": "red",    "label": "P3", "bounce": "0" } },
-    { "type": "wokwi-pushbutton", "id": "btnP4", "top": 180, "left": 540, "attrs": { "color": "purple", "label": "P4", "bounce": "0" } },
     { "type": "wokwi-resistor",   "id": "rBtnP2","top": 90,  "left": 660, "attrs": { "value": "10000" } },
+
+    { "type": "wokwi-dht22",         "id": "dht1b", "top": 100, "left": -480, "rotate": 270, "attrs": { "temperature": "23", "humidity": "55" } },
+    { "type": "wokwi-potentiometer", "id": "pot1",  "top": -200, "left": 40,  "attrs": {} },
 
     { "type": "wokwi-pushbutton", "id": "btn1", "top": 280, "left": 540, "attrs": { "color": "black", "label": "RESET", "bounce": "0" } },
 
@@ -88,8 +90,14 @@
     [ "btnP2:2.l", "esp:GND.2", "black",  [] ],
     [ "btnP3:1.l", "esp:16",    "red",    [] ],
     [ "btnP3:2.l", "esp:GND.2", "black",  [] ],
-    [ "btnP4:1.l", "esp:17",    "purple", [] ],
-    [ "btnP4:2.l", "esp:GND.2", "black",  [] ],
+
+    [ "dht1b:VCC", "esp:3V3",   "red",    ["*"] ],
+    [ "dht1b:GND", "esp:GND.1", "black",  ["*"] ],
+    [ "dht1b:SDA", "esp:17",    "yellow", [] ],
+
+    [ "pot1:VCC",  "esp:3V3",   "red",    ["*"] ],
+    [ "pot1:GND",  "esp:GND.2", "black",  ["*"] ],
+    [ "pot1:SIG",  "esp:VN",    "white",  ["*"] ],
 
     [ "btn1:1.l", "esp:14",     "orange", [] ],
     [ "btn1:2.l", "esp:GND.2",  "black",  [] ],
