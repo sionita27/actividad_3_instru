@@ -7,7 +7,7 @@
 El montaje fusiona en un único ESP32 DevKit~C~v4 los componentes de Act1 y
 Act2 y añade los dos elementos nuevos exigidos por el autodiagnóstico
 (tabla~\ref{tab:componentes}). El cableado completo se describe en
-\codein{diagram.json} y se reproduce en la figura~\ref{fig:wokwi}.
+\codein{diagram.json}.
 
 \begin{table}[H]
   \centering
@@ -40,18 +40,6 @@ Act2 y añade los dos elementos nuevos exigidos por el autodiagnóstico
   \caption{Componentes y asignación de pines del sistema integrado.}
   \label{tab:componentes}
 \end{table}
-
-\begin{figure}[H]
-  \centering
-  \IfFileExists{img/wokwi_diagram.png}{%
-    \includegraphics[width=0.85\textwidth]{wokwi_diagram.png}%
-  }{%
-    \fbox{\textit{[Pendiente: captura de pantalla del montaje Wokwi]}}%
-  }
-  \caption{Montaje completo en Wokwi: clasificador, ascensor, HMI y la pareja
-    de sensores nuevos del autodiagnóstico (DHT22 de reserva y potenciómetro).}
-  \label{fig:wokwi}
-\end{figure}
 
 \subsection{Pines nuevos del autodiagnóstico}
 

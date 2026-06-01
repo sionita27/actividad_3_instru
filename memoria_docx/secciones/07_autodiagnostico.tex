@@ -10,17 +10,7 @@ lazo de control de clima. En cada \texttt{diag\_tick()} ejecuta cinco
 acciones encadenadas: lee los sensores monitorizados, valida cada lectura por
 rango, mantiene una media móvil de las medidas válidas, decide la fuente
 activa de temperatura y de humedad por separado, y reacciona ante el fallo
-con una severidad escalonada que puede llegar a inhibir el ascensor. El
-diagrama de bloques se muestra en la figura~\ref{fig:diag}.
-
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=0.88\textwidth]{diag_pipeline.png}
-  \caption{Tubería de \texttt{diagnostics}: lectura → validación
-    por rango → conmutación independiente T/H →
-    promediado → severidad.}
-  \label{fig:diag}
-\end{figure}
+con una severidad escalonada que puede llegar a inhibir el ascensor.
 
 \paragraph{Detección de fallos por límites de rango.}
 \label{sub:rango}
@@ -31,7 +21,7 @@ de la banda ---o un \texttt{NaN} en el caso del DHT22, que la librería
 devuelve ante fallo del protocolo--- se interpreta como
 \textbf{cortocircuito o circuito abierto} de la conexión del sensor. Para
 la temperatura y la humedad, los límites se han elegido más estrechos que
-el rango total del chip (−40..80°C y 0..100 % según
+el rango total del chip (−40..80°C y 0..$100$\,\% según
 \cite{aosong_dht22}): así un valor físicamente posible pero implausible
 para el entorno de la planta se trata también como avería. Para evitar disparos por ruido, se exige que
 \texttt{DIAG\_FAULT\_SAMPLES} (3) lecturas consecutivas sean malas antes de

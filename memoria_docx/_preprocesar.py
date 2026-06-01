@@ -71,40 +71,9 @@ def preprocess(text):
         text = text.replace(src, dst)
     return text
 
-# Reemplazos específicos para los \IfFileExists (llaves anidadas: regex incómoda).
-# Se sustituyen los bloques completos por la inclusión directa de la imagen.
-IFFILEEXISTS_BLOCKS = [
-    # 05_hardware.tex
-    (
-        r"""  \IfFileExists{img/wokwi_diagram.png}{%
-    \includegraphics[width=0.85\textwidth]{wokwi_diagram.png}%
-  }{%
-    \fbox{\textit{[Pendiente: captura de pantalla del montaje Wokwi]}}%
-  }""",
-        r"  \includegraphics[width=0.85\textwidth]{wokwi_diagram.png}"
-    ),
-    # 07_autodiagnostico.tex
-    (
-        r"""  \IfFileExists{img/diag_pipeline.png}{%
-    \includegraphics[width=0.88\textwidth]{diag_pipeline.png}%
-  }{%
-    \fbox{\textit{[Pendiente: diagrama de bloques del módulo
-      \codein{diagnostics}]}}%
-  }""",
-        r"  \includegraphics[width=0.88\textwidth]{diag_pipeline.png}"
-    ),
-]
-
-def unwrap_iffileexists(text):
-    for src, dst in IFFILEEXISTS_BLOCKS:
-        if src in text:
-            text = text.replace(src, dst)
-    return text
-
 # --- procesa ficheros raíz ---
 def process_file(src, dst):
     txt = src.read_text(encoding="utf-8")
-    txt = unwrap_iffileexists(txt)
     txt = preprocess(txt)
     dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_text(txt, encoding="utf-8")
