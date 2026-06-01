@@ -37,7 +37,8 @@ Las cajas bajas (ESCALERA) se desvían a la escalera y no llaman al ascensor.
 ```
 actividad_3/
 ├── README.md                  ← este archivo
-├── muintel07_act3.docx         ← enunciado oficial
+├── memoria.pdf                 ← memoria de la actividad (PDF)
+├── memoria.docx                ← memoria de la actividad (Word)
 └── actividad_3_vs/             ← sketch Arduino integrado
     ├── actividad_3_vs.ino      ← orquestador (setup + loop no bloqueante)
     ├── config.h                ← pines, setpoints, umbrales y constantes
