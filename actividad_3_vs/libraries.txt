@@ -1,0 +1,6 @@
+LiquidCrystal I2C
+DHT sensor library
+Adafruit Unified Sensor
+ESP32Servo
+IRremote
+RTClib
